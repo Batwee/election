@@ -109,33 +109,64 @@ col3.metric("Abstentions 🟧", synthese.get("abstention", 0))
 col4.metric("Total Votants 👥", synthese.get("total", 0))
 
 # --------------------------------------------------------------------------- #
-# Graphique en barres par Groupe Politique
+# Affichage de la Synthèse et du Graphique
 # --------------------------------------------------------------------------- #
 
+groupes_data = vote.get("groupes", [])
+synthese = vote.get("syntheseVote", {})
+
+# Calcul de secours si syntheseVote est à 0 dans le JSON
+pour_tot = synthese.get("pour", 0)
+contre_tot = synthese.get("contre", 0)
+abst_tot = synthese.get("abstention", 0)
+
+if pour_tot == 0 and contre_tot == 0 and abst_tot == 0 and groupes_data:
+    pour_tot = sum(g.get("pour", 0) for g in groupes_data)
+    contre_tot = sum(g.get("contre", 0) for g in groupes_data)
+    abst_tot = sum(g.get("abstention", 0) for g in groupes_data)
+
+total_votants = synthese.get("total", 0) or (pour_tot + contre_tot + abst_tot)
+
+st.markdown("### 📊 Synthèse globale du vote")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Pour 🟩", pour_tot)
+col2.metric("Contre 🟥", contre_tot)
+col3.metric("Abstentions 🟧", abst_tot)
+col4.metric("Total Votants 👥", total_votants)
 
 st.divider()
 st.markdown("### 🏛️ Répartition des votes par groupe politique")
-
-groupes_data = vote.get("groupes", [])
 
 if not groupes_data:
     st.info("Le détail par groupe politique n'est pas disponible pour ce scrutin.")
 else:
     df_chart = pd.DataFrame(groupes_data)
-    
-    # Si les sigles sont des codes PO..., on tente un mapping de secours
+
+    # Conversion des codes PO... si jamais le script update.js n'a pas tourné
     MAP_SECOURS = {
         "PO845401": "RN", "PO845407": "EPR", "PO845413": "LFI-NFP",
         "PO845419": "SOC", "PO845425": "DR", "PO845439": "EcoS",
         "PO845454": "Dem", "PO845470": "HOR", "PO845485": "LIOT",
         "PO845514": "GDR", "PO872880": "UDR", "PO840056": "NI"
     }
+
     if "sigle" in df_chart.columns:
         df_chart["sigle"] = df_chart["sigle"].apply(lambda x: MAP_SECOURS.get(x, x))
+        
+        # On ne conserve que les colonnes utiles
         df_chart = df_chart.set_index("sigle")[["pour", "contre", "abstention"]]
         
-        st.bar_chart(
-            df_chart,
-            color=["#2ecc71", "#e74c3c", "#f39c12"],
-            height=400
-        )
+        # Filtre : on retire les groupes qui n'ont aucun votant sur ce scrutin
+        df_chart["total_groupe"] = df_chart["pour"] + df_chart["contre"] + df_chart["abstention"]
+        df_chart = df_chart[df_chart["total_groupe"] > 0].drop(columns=["total_groupe"])
+
+        if not df_chart.empty:
+            st.bar_chart(
+                df_chart,
+                color=["#2ecc71", "#e74c3c", "#f39c12"],
+                height=400
+            )
+        else:
+            st.info("Aucun vote enregistré parmi les groupes pour ce scrutin.")
+    else:
+        st.warning("Structure des groupes invalide dans les données.")
