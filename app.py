@@ -98,16 +98,6 @@ else:
 if vote.get("demandeur"):
     st.caption(f"**Demandeur :** {vote.get('demandeur')}")
 
-# Synthèse globale des voix
-st.markdown("### 📊 Synthèse globale du vote")
-synthese = vote.get("syntheseVote", {})
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Pour 🟩", synthese.get("pour", 0))
-col2.metric("Contre 🟥", synthese.get("contre", 0))
-col3.metric("Abstentions 🟧", synthese.get("abstention", 0))
-col4.metric("Total Votants 👥", synthese.get("total", 0))
-
 # --------------------------------------------------------------------------- #
 # Affichage de la Synthèse et du Graphique
 # --------------------------------------------------------------------------- #
