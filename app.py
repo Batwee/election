@@ -112,6 +112,7 @@ col4.metric("Total Votants 👥", synthese.get("total", 0))
 # Graphique en barres par Groupe Politique
 # --------------------------------------------------------------------------- #
 
+
 st.divider()
 st.markdown("### 🏛️ Répartition des votes par groupe politique")
 
@@ -120,17 +121,21 @@ groupes_data = vote.get("groupes", [])
 if not groupes_data:
     st.info("Le détail par groupe politique n'est pas disponible pour ce scrutin.")
 else:
-    # Construction du DataFrame pour le graphique Streamlit
     df_chart = pd.DataFrame(groupes_data)
     
-    if not df_chart.empty and "sigle" in df_chart.columns:
+    # Si les sigles sont des codes PO..., on tente un mapping de secours
+    MAP_SECOURS = {
+        "PO845401": "RN", "PO845407": "EPR", "PO845413": "LFI-NFP",
+        "PO845419": "SOC", "PO845425": "DR", "PO845439": "EcoS",
+        "PO845454": "Dem", "PO845470": "HOR", "PO845485": "LIOT",
+        "PO845514": "GDR", "PO872880": "UDR", "PO840056": "NI"
+    }
+    if "sigle" in df_chart.columns:
+        df_chart["sigle"] = df_chart["sigle"].apply(lambda x: MAP_SECOURS.get(x, x))
         df_chart = df_chart.set_index("sigle")[["pour", "contre", "abstention"]]
         
-        # Affichage du graphique en barres empilées
         st.bar_chart(
             df_chart,
-            color=["#2ecc71", "#e74c3c", "#f39c12"], # Vert (Pour), Rouge (Contre), Orange (Abstention)
+            color=["#2ecc71", "#e74c3c", "#f39c12"],
             height=400
         )
-    else:
-        st.info("Données insuffisantes pour générer le graphique.")
