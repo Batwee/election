@@ -18,50 +18,47 @@ import streamlit as st
 
 # Adaptez le chemin si votre fichier est ailleurs dans le dépôt
 # (ex. si vous générez une archive par législature : votes_16.json, votes_17.json...)
-VOTES_URL = "https://raw.githubusercontent.com/Batwee/updatevotes/main/votes.json"
+URL_API = "https://raw.githubusercontent.com/Batwee/updatevotes/main/votes.json"
 
-st.set_page_config(page_title="Votes de l'Assemblée nationale", layout="wide")
+@st.cache_data(ttl=3600)  # Mettre en cache pour éviter de re-télécharger à chaque clic
+def load_votes():
+    try:
+        response = requests.get(URL_API)
+        response.raise_for_status()
+        data = response.json()
+        
+        # 'data' est déjà directement la liste des scrutins [ {...}, {...} ]
+        if isinstance(data, list):
+            return data
+        elif isinstance(data, dict):
+            # Sécurité au cas où la structure évolue
+            return data.get('scrutins', data.get('votes', []))
+        return []
+    except Exception as e:
+        st.error(f"Impossible de récupérer la liste des scrutins : {e}")
+        return []
 
+# Chargement des données
+votes = load_votes()
 
-def normalize(text: str) -> str:
-    """Minuscule + suppression des accents, pour une recherche insensible à la casse/accents."""
-    if not text:
-        return ""
-    text = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in text if not unicodedata.combining(c)).lower()
+st.title("🏛️ Scrutins de l'Assemblée Nationale")
+st.write(f"Nombre total de scrutins : {len(votes)}")
 
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def load_votes() -> tuple[dict, list[dict]]:
-    """Télécharge et met en cache le fichier votes.json complet (liste brute)."""
-    r = requests.get(VOTES_URL, timeout=30)
-    r.raise_for_status()
-    payload = r.json()
-    return payload["meta"], payload["scrutins"]
-
-
-def build_filter_df(scrutins: list[dict]) -> pd.DataFrame:
-    """DataFrame plat (numero/titre/date/sort) utilisé uniquement pour
-    filtrer et trier la liste — le détail complet (synthese, groupes)
-    reste dans les dicts d'origine, accessibles via scrutins_index."""
-    df = pd.DataFrame(
-        [
-            {
-                "numero": s["numero"],
-                "titre": s.get("titre") or "",
-                "date": s.get("date"),
-                "sort": s.get("sort"),
-            }
-            for s in scrutins
-        ]
-    )
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    return df
-
-
-def get_scrutin(scrutins_index: dict, numero: int) -> dict:
-    """Récupère l'enregistrement complet (avec le détail par groupe) d'un scrutin."""
-    return scrutins_index[numero]
+# Exemple de parcours des scrutins
+if votes:
+    # Affichage du dernier scrutin
+    dernier_vote = votes[0]
+    
+    st.subheader(f"Scrutin n°{dernier_vote.get('numero')} - {dernier_vote.get('titre')}")
+    st.write(f"**Date :** {dernier_vote.get('date')}")
+    st.write(f"**Résultat (Sort) :** {dernier_vote.get('sort')}")
+    
+    synthese = dernier_vote.get('syntheseVote', {})
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Pour", synthese.get('pour', 0))
+    col2.metric("Contre", synthese.get('contre', 0))
+    col3.metric("Abstention", synthese.get('abstention', 0))
+    col4.metric("Total", synthese.get('total', 0))
 
 
 # --------------------------------------------------------------------------- #
