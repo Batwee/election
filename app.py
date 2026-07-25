@@ -18,7 +18,7 @@ import streamlit as st
 
 # Adaptez le chemin si votre fichier est ailleurs dans le dépôt
 # (ex. si vous générez une archive par législature : votes_16.json, votes_17.json...)
-VOTES_URL = "https://raw.githubusercontent.com/Batwee/updatevotes/main/data/votes.json"
+VOTES_URL = "https://raw.githubusercontent.com/Batwee/updatevotes/main/votes.json"
 
 st.set_page_config(page_title="Votes de l'Assemblée nationale", layout="wide")
 
