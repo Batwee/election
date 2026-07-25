@@ -65,12 +65,22 @@ def get_scrutins(legislature: int) -> pd.DataFrame:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_scrutin_detail(legislature: int, numero: int) -> dict:
-    """Récupère le détail d'un scrutin (résultat global + votes par groupe)."""
+    """Récupère le détail d'un scrutin (résultat global + votes par groupe).
+
+    L'API nosdeputes.fr renvoie parfois une erreur 500 ponctuelle (scrutin
+    volumineux, service surchargé...) : on retente une fois avant d'abandonner.
+    """
     url = f"{BASE_URL}/{legislature}/scrutin/{numero}/json"
-    r = requests.get(url, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    return data.get("scrutin", data)
+    last_error = None
+    for attempt in range(2):
+        try:
+            r = requests.get(url, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            return data.get("scrutin", data)
+        except Exception as e:
+            last_error = e
+    raise last_error
 
 
 def _find_first(d: dict, candidates):
@@ -147,14 +157,9 @@ st.caption("Données : API JSON de [NosDéputés.fr](https://www.nosdeputes.fr) 
 with st.sidebar:
     st.header("Filtre")
     legislature = st.number_input("Législature", min_value=15, max_value=17, value=17, step=1)
-    mot_cle = st.text_input("Mot-clé de la loi", placeholder="ex : immigration, retraite, budget…")
-    only_final = st.checkbox(
-        "Ne garder que les votes sur l'ensemble du texte (résultat qui fait foi)",
-        value=True,
-    )
     st.caption(
-        "Astuce : laissez le mot-clé vide pour voir le tout dernier scrutin, "
-        "quel que soit le texte concerné."
+        "La liste ne montre que les votes sur **l'ensemble du texte** "
+        "(le scrutin qui fait foi pour une loi, pas les votes sur amendements)."
     )
 
 try:
@@ -164,22 +169,30 @@ except Exception as e:
     st.error(f"Impossible de récupérer la liste des scrutins : {e}")
     st.stop()
 
-filtered = scrutins_df.copy()
-if mot_cle:
-    key = normalize(mot_cle)
-    filtered = filtered[filtered["titre"].apply(lambda t: key in normalize(t))]
+# On ne garde que les votes finaux ("sur l'ensemble ...") : ce sont les scrutins
+# qui font foi pour une loi donnée, un seul par texte adopté définitivement en séance.
+lois_df = scrutins_df[
+    scrutins_df["titre"].apply(lambda t: normalize("l'ensemble") in normalize(t))
+].sort_values("date", ascending=False)
 
-if only_final:
-    final_mask = filtered["titre"].apply(lambda t: normalize("l'ensemble") in normalize(t))
-    if final_mask.any():
-        filtered = filtered[final_mask]
-
-if filtered.empty:
-    st.warning("Aucun scrutin ne correspond à ce filtre. Essayez un autre mot-clé.")
+if lois_df.empty:
+    st.warning("Aucun vote sur l'ensemble d'un texte n'a été trouvé pour cette législature.")
     st.stop()
 
-# Le dernier scrutin qui fait foi = le numéro le plus élevé parmi les résultats filtrés
-dernier = filtered.sort_values("numero", ascending=False).iloc[0]
+
+def label_for(row) -> str:
+    date_str = row["date"].strftime("%d/%m/%Y") if pd.notna(row["date"]) else "date inconnue"
+    return f"[{date_str}] {row['titre']}"
+
+
+options = lois_df.index.tolist()
+choice_idx = st.selectbox(
+    "Choisir une loi",
+    options=options,
+    format_func=lambda idx: label_for(lois_df.loc[idx]),
+)
+
+dernier = lois_df.loc[choice_idx]
 numero = int(dernier["numero"])
 
 st.subheader(f"Scrutin n°{numero}")
@@ -191,7 +204,12 @@ try:
     with st.spinner(f"Chargement du détail du scrutin n°{numero}…"):
         detail = get_scrutin_detail(legislature, numero)
 except Exception as e:
-    st.error(f"Impossible de récupérer le détail du scrutin n°{numero} : {e}")
+    st.error(
+        f"Impossible de récupérer le détail du scrutin n°{numero} : {e}\n\n"
+        "Il s'agit souvent d'une erreur temporaire côté NosDéputés.fr "
+        "(scrutin volumineux ou service surchargé) — essayez une autre loi "
+        "dans la liste ou réessayez dans quelques instants."
+    )
     st.stop()
 
 sort_info = _find_first(detail, ["sort"])
