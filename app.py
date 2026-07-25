@@ -3,6 +3,9 @@ import pandas as pd
 import requests
 import streamlit as st
 
+# Import direct du dictionnaire (ou collez le dictionnaire au début de app.py)
+from themes import THEMES
+
 st.set_page_config(page_title="Votes Assemblée Nationale", page_icon="🏛️", layout="wide")
 
 URL_API = "https://raw.githubusercontent.com/Batwee/updatevotes/main/votes.json"
@@ -28,31 +31,57 @@ if not scrutins:
     st.warning("Aucune donnée disponible.")
     st.stop()
 
-# --- FILTRES ---
+# --------------------------------------------------------------------------- #
+# Menu & Filtres
+# --------------------------------------------------------------------------- #
+
 st.title("🏛️ Votes de l'Assemblée nationale")
 
 with st.sidebar:
     st.header("Filtres")
-    mot_cle = st.text_input("Rechercher un mot-clé", placeholder="ex : budget, immigration…")
+    
+    # Sélecteur de thèmes avec option "Tous"
+    options_themes = ["Tous les thèmes"] + list(THEMES.keys())
+    theme_choisi = st.selectbox("Filtrer par thème :", options=options_themes)
+    
     only_final = st.checkbox("Uniquement les votes d'ensemble", value=True)
 
+# --------------------------------------------------------------------------- #
+# Logic de filtrage
+# --------------------------------------------------------------------------- #
+
 filtered_scrutins = []
+
 for s in scrutins:
     titre_norm = normalize(s.get("titre", ""))
+    
+    # 1. Filtre sur "Vote d'ensemble"
     if only_final and "ensemble" not in titre_norm:
         continue
-    if mot_cle and normalize(mot_cle) not in titre_norm:
-        continue
+    
+    # 2. Filtre par Thème
+    if theme_choisi != "Tous les thèmes":
+        keywords = THEMES.get(theme_choisi, [])
+        # On vérifie si au moins un mot-clé du thème est présent dans le titre
+        match = any(normalize(kw) in titre_norm for kw in keywords)
+        if not match:
+            continue
+            
     filtered_scrutins.append(s)
 
 if not filtered_scrutins:
-    st.warning("Aucun scrutin ne correspond à votre recherche.")
+    st.warning("Aucun scrutin ne correspond au thème sélectionné.")
     st.stop()
 
-# --- SÉLECTEUR (Titre uniquement) ---
+# --------------------------------------------------------------------------- #
+# Sélecteur du Scrutin
+# --------------------------------------------------------------------------- #
+
 def format_titre(s) -> str:
     t = s.get("titre", "Scrutin sans titre")
     return t[:120] + "..." if len(t) > 120 else t
+
+st.write(f"**{len(filtered_scrutins)}** scrutin(s) trouvé(s)")
 
 index_choisi = st.selectbox(
     "Sélectionnez un projet / proposition de loi :",
@@ -62,7 +91,10 @@ index_choisi = st.selectbox(
 
 vote = filtered_scrutins[index_choisi]
 
-# --- AFFICHAGE DU SCRUTIN ---
+# --------------------------------------------------------------------------- #
+# Affichage du Scrutin Sélectionné
+# --------------------------------------------------------------------------- #
+
 st.divider()
 st.subheader(vote.get("titre"))
 
@@ -101,7 +133,6 @@ else:
     df = pd.DataFrame(groupes)
     
     if "sigle" in df.columns:
-        # Filtrer uniquement les colonnes nécessaires et supprimer les groupes sans votants
         df = df.set_index("sigle")[["pour", "contre", "abstention"]]
         df["total"] = df["pour"] + df["contre"] + df["abstention"]
         df = df[df["total"] > 0].drop(columns=["total"])
@@ -109,7 +140,7 @@ else:
         if not df.empty:
             st.bar_chart(
                 df,
-                color=["#2ecc71", "#e74c3c", "#f39c12"],  # Vert (Pour), Rouge (Contre), Orange (Abstention)
+                color=["#2ecc71", "#e74c3c", "#f39c12"],
                 height=400
             )
         else:
