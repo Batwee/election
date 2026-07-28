@@ -135,6 +135,11 @@ THEMES = {
     ]
 }
 
+# Ordre politique de la gauche vers la droite pour le tri du graphique
+ORDRE_GROUPES = [
+    "GDR", "LFI-NFP", "EcoS", "SOC", "Dem", "EPR", "HOR", "LIOT", "DR", "UDR", "RN", "NI"
+]
+
 URL_API = "https://raw.githubusercontent.com/Batwee/updatevotes/main/votes.json"
 
 def normalize(text: str) -> str:
@@ -222,13 +227,11 @@ def format_titre_select(s) -> str:
     ]
     
     for phrase in phrases_a_retirer:
-        # Remplacement insensible à la casse
         idx = t.lower().find(phrase.lower())
         while idx != -1:
             t = t[:idx] + t[idx + len(phrase):]
             idx = t.lower().find(phrase.lower())
             
-    # Nettoyage des espaces multiples éventuels
     t = " ".join(t.split())
     
     return t[:130] + "..." if len(t) > 130 else t
@@ -277,7 +280,7 @@ c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
 # --------------------------------------------------------------------------- #
-# Graphique en Barres par Groupe Politique
+# Graphique en Barres par Groupe Politique (Trié de gauche à droite)
 # --------------------------------------------------------------------------- #
 
 st.divider()
@@ -291,12 +294,16 @@ else:
     df = pd.DataFrame(groupes)
     
     if "sigle" in df.columns:
-        # Configuration des colonnes et exclusion des groupes sans votants
         df = df.set_index("sigle")[["pour", "contre", "abstention"]]
         df["total"] = df["pour"] + df["contre"] + df["abstention"]
         df = df[df["total"] > 0].drop(columns=["total"])
 
         if not df.empty:
+            # Tri selon l'échiquier politique défini dans ORDRE_GROUPES
+            # Les groupes absents de la liste seront placés à la fin par défaut
+            df["ordre_tri"] = df.index.map(lambda x: ORDRE_GROUPES.index(x) if x in ORDRE_GROUPES else 999)
+            df = df.sort_values("ordre_tri").drop(columns=["ordre_tri"])
+
             st.bar_chart(
                 df,
                 color=["#2ecc71", "#e74c3c", "#f39c12"],  # Vert (Pour), Rouge (Contre), Orange (Abstention)
