@@ -17,7 +17,7 @@ THEMES = {
     "Écologie": [
         "climat", "environnement", "écologie", "biodiversité",
         "pollution", "carbone", "renouvelable", "transition énergétique",
-        "développement durable", "l'eau", "l'air", "déchets",
+        "développement durable", "eau", "air", "déchets",
         "recyclage", "agriculture durable", "émissions"
     ],
     "Économie": [
@@ -41,7 +41,7 @@ THEMES = {
     "Éducation": [
         "éducation", "école", "collège", "lycée", "université",
         "enseignement", "professeur", "enseignant", "élève",
-        "étudiant", "bts", "master", "la recherche", "apprentissage"
+        "étudiant", "bts", "master", "recherche", "apprentissage"
     ],
     "Transports": [
         "transport", "transports", "voiture", "automobile",
@@ -65,7 +65,7 @@ THEMES = {
         "logement", "immobilier", "location", "loyer",
         "bail", "propriétaire", "locataire",
         "construction", "urbanisme", "habitat",
-        "copropriété"
+        "copropriété", "apl"
     ],
     "Société": [
         "famille", "égalité", "discrimination", "laïcité",
@@ -81,14 +81,14 @@ THEMES = {
     "Agriculture": [
         "agriculture", "agriculteur", "élevage",
         "pêche", "forêt", "viticulture",
-        "alimentation", " bio", "semence"
+        "alimentation", "bio", "semence"
     ],
     "Numérique": [
         "numérique", "informatique", "internet",
-        "intelligence artificielle", "ia ",
+        "intelligence artificielle", "ia",
         "cyber", "données", "rgpd",
         "algorithme", "logiciel", "cloud",
-        " 5g", "télécommunications"
+        "5g", "télécommunications"
     ],
     "Culture": [
         "culture", "patrimoine", "cinéma",
@@ -104,7 +104,7 @@ THEMES = {
     "Europe et international": [
         "union européenne", "europe",
         "commission européenne", "otan",
-        "l'onu", "international",
+        "onu", "international",
         "coopération", "traité",
         "diplomatie", "accord"
     ],
@@ -128,7 +128,7 @@ THEMES = {
     ],
     "Énergie": [
         "énergie", "électricité",
-        " gaz", "nucléaire",
+        "gaz", "nucléaire",
         "éolien", "solaire",
         "hydrogène", "hydraulique",
         "réacteur", "edf"
