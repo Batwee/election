@@ -11,13 +11,13 @@ st.set_page_config(
 )
 
 # --------------------------------------------------------------------------- #
-# Dictionnaire des Thèmes
+# Dictionnaire des Thèmes (Mots-clés sécurisés avec frontières de mots / expressions exactes)
 # --------------------------------------------------------------------------- #
 THEMES = {
     "Écologie": [
         "climat", "environnement", "écologie", "biodiversité",
         "pollution", "carbone", "renouvelable", "transition énergétique",
-        "développement durable", "eau", "air", "déchets",
+        "développement durable", "l'eau", "l'air", "déchets",
         "recyclage", "agriculture durable", "émissions"
     ],
     "Économie": [
@@ -194,10 +194,25 @@ for s in scrutins:
     if only_final and "ensemble" not in titre_norm:
         continue
     
-    # 2. Filtre par Thème
+    # 2. Filtre par Thème (Sécurisé pour éviter les sous-chaînes parasites comme "paritaire")
     if theme_choisi != "Tous les thèmes":
         keywords = THEMES.get(theme_choisi, [])
-        match = any(normalize(kw) in titre_norm for kw in keywords)
+        match = False
+        mots_titre = titre_norm.split()
+        
+        for kw in keywords:
+            kw_norm = normalize(kw)
+            # Si le mot-clé contient un espace (ex: "l'eau", "l'air", "transition énergétique"), on cherche la sous-chaîne exacte
+            if " " in kw_norm:
+                if kw_norm in titre_norm:
+                    match = True
+                    break
+            else:
+                # Sinon, on vérifie si le mot-clé correspond exactement à un mot entier du titre
+                if kw_norm in mots_titre:
+                    match = True
+                    break
+                    
         if not match:
             continue
             
@@ -298,9 +313,7 @@ else:
         df = df[df["total"] > 0].drop(columns=["total"])
 
         if not df.empty:
-            # Conversion de l'index en type Categorical pour imposer l'ordre exact à Altair/Streamlit
             groupes_presents = [g for g in ORDRE_GROUPES if g in df.index]
-            # Ajout des éventuels groupes non répertoriés à la fin
             autres_groupes = [g for g in df.index if g not in ORDRE_GROUPES]
             ordre_final = groupes_presents + autres_groupes
 
