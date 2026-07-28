@@ -18,7 +18,7 @@ THEMES = {
         "climat", "environnement", "écologie", "biodiversité",
         "pollution", "carbone", "renouvelable", "transition énergétique",
         "développement durable", "l'eau", "l'air", "déchets",
-        "recyclage", "agriculture", "durable", "émissions"
+        "recyclage", "agriculture", "agricole",  "durable", "émissions"
     ],
     "Économie": [
         "économie", "budget", "finances", "fiscal", "fiscalité",
