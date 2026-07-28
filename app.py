@@ -150,7 +150,7 @@ def normalize(text: str) -> str:
 
 @st.cache_data(ttl=3600)
 def load_votes():
-    """Charge le fichier JSON contenant les données des scrutins."""
+    """Charge le fichier JSON contenant les données de base des scrutins."""
     try:
         res = requests.get(URL_API)
         res.raise_for_status()
@@ -161,12 +161,16 @@ def load_votes():
 
 @st.cache_data(ttl=3600)
 def load_clair_vote(numero_scrutin):
-    """Interroge l'API clair.vote pour récupérer les détails supplémentaires d'un scrutin."""
+    """Interroge l'API clair.vote pour récupérer le résumé et les détails complets."""
     try:
         url = f"https://clair.vote/api/v1/scrutins/{numero_scrutin}"
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
-            return res.json()
+            data = res.json()
+            # L'API clair.vote encapsule souvent la data dans une clé "data" ou la renvoie directement
+            if isinstance(data, dict) and "data" in data:
+                return data["data"]
+            return data
     except Exception:
         pass
     return None
@@ -301,7 +305,7 @@ c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
 # --------------------------------------------------------------------------- #
-# Graphique en Barres par Groupe Politique
+# Graphique en Barres par Groupe Politique (Tri forcé de gauche à droite)
 # --------------------------------------------------------------------------- #
 
 st.divider()
@@ -338,35 +342,64 @@ else:
         st.warning("Format des données des groupes incorrect.")
 
 # --------------------------------------------------------------------------- #
-# Résumé, Liens et Détail des Votes par Parti (API clair.vote)
+# Résumé, Liens et Détails Supplémentaires (API clair.vote)
 # --------------------------------------------------------------------------- #
 
 st.divider()
-st.markdown("### 📄 Informations complémentaires et détails des votes")
+st.markdown("### 📄 Informations complémentaires et résumé (clair.vote)")
 
 if clair_data:
-    # 1. Résumé du texte
-    resume = clair_data.get("resume") or clair_data.get("description") or clair_data.get("objet")
-    if resume:
-        st.markdown("#### 📝 Résumé de la loi")
-        st.write(resume)
+    # 1. Résumé IA / Description issu de l'API
+    resume_ia = clair_data.get("resumeIA") or clair_data.get("resume") or clair_data.get("description")
+    if resume_ia:
+        st.markdown("#### 💡 Résumé de la loi")
+        st.info(resume_ia)
     
-    # 2. Lien vers les informations officielles
-    url_info = clair_data.get("url") or clair_data.get("lien") or f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin}"
-    if url_info:
-        st.markdown(f"🔗 **Lien officiel :** [Consulter la page source]({url_info})")
+    # 2. Lien source officiel
+    source_url = clair_data.get("sourceUrl") or clair_data.get("url") or f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin}"
+    if source_url:
+        st.markdown(f"🔗 **Lien officiel :** [Accéder à la source officielle sur l'Assemblée Nationale]({source_url})")
 
-    # 3. Qui a voté quoi dans quel parti (si disponible dans l'API)
-    # L'API clair.vote renvoie souvent les détails individuels ou par parlementaire/groupe
-    details_votes = clair_data.get("votes") or clair_data.get("acteurs") or clair_data.get("groupesDetails")
-    
-    if details_votes and isinstance(details_votes, list):
-        st.markdown("#### 👥 Détail précis des votes par député / groupe")
-        df_details = pd.DataFrame(details_votes)
-        st.dataframe(df_details, use_container_width=True)
-    else:
-        st.info("Le détail nominatif ultra-précis par député n'est pas structuré sous ce format dans l'API clair.vote pour ce scrutin, référez-vous au graphique agrégé ci-dessus.")
+    # 3. Détails des votes individuels (si présents dans la structure de l'API)
+    votes_par_position = clair_data.get("votesByPosition")
+    if votes_par_position and isinstance(votes_par_position, dict):
+        st.markdown("#### 🔍 Ventilation détaillée par parlementaire")
+        tab_p, tab_c, tab_a = st.tabs(["🟢 Pour", "🔴 Contre", "🟠 Abstention"])
+        
+        with tab_p:
+            pours_list = votes_par_position.get("pour", [])
+            if pours_list:
+                df_p = pd.DataFrame([{
+                    "Nom": f"{item.get('parlementaire', {}).get('prenom', '')} {item.get('parlementaire', {}).get('nom', '')}",
+                    "Groupe": item.get('parlementaire', {}).get('groupe', {}).get('nom', 'N/C')
+                } for item in pours_list[:50]]) # Limité à 50 pour la fluidité de l'affichage
+                st.dataframe(df_p, use_container_width=True)
+                if len(pours_list) > 50:
+                    st.caption(f"Affichage limité à 50 députés sur {len(pours_list)} pour optimiser l'affichage.")
+            else:
+                st.write("Aucun détail disponible.")
+                
+        with tab_c:
+            contres_list = votes_par_position.get("contre", [])
+            if contres_list:
+                df_c = pd.DataFrame([{
+                    "Nom": f"{item.get('parlementaire', {}).get('prenom', '')} {item.get('parlementaire', {}).get('nom', '')}",
+                    "Groupe": item.get('parlementaire', {}).get('groupe', {}).get('nom', 'N/C')
+                } for item in contres_list[:50]])
+                st.dataframe(df_c, use_container_width=True)
+            else:
+                st.write("Aucun détail disponible.")
+                
+        with tab_a:
+            abst_list = votes_par_position.get("abstention", [])
+            if abst_list:
+                df_a = pd.DataFrame([{
+                    "Nom": f"{item.get('parlementaire', {}).get('prenom', '')} {item.get('parlementaire', {}).get('nom', '')}",
+                    "Groupe": item.get('parlementaire', {}).get('groupe', {}).get('nom', 'N/C')
+                } for item in abst_list[:50]])
+                st.dataframe(df_a, use_container_width=True)
+            else:
+                st.write("Aucun détail disponible.")
 else:
-    # Lien de secours vers le site officiel de l'Assemblée si l'API ne répond pas
-    st.markdown(f"🔗 **Lien officiel AN :** [Consulter le scrutin n°{numero_scrutin} sur l'Assemblée Nationale](https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin})")
-    st.info("Impossible de récupérer les informations complémentaires détaillées de l'API clair.vote pour le moment.")
+    st.markdown(f"🔗 **Lien officiel AN :** [Consulter le scrutin n°{numero_scrutin} sur le site de l'Assemblée Nationale](https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin})")
+    st.info("Les informations enrichies de l'API clair.vote ne sont pas disponibles pour ce scrutin spécifique.")
