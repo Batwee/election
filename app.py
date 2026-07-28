@@ -203,12 +203,34 @@ if not filtered_scrutins:
     st.stop()
 
 # --------------------------------------------------------------------------- #
-# Sélecteur du Scrutin
+# Sélecteur du Scrutin (avec nettoyage spécifique pour l'affichage du menu)
 # --------------------------------------------------------------------------- #
 
-def format_titre(s) -> str:
-    """Affiche uniquement le titre du texte de loi dans la sélection."""
+def format_titre_select(s) -> str:
+    """Nettoie le titre uniquement pour le select, sans modifier les données sources."""
     t = s.get("titre", "Scrutin sans titre")
+    
+    # Liste des expressions à retirer du select
+    phrases_a_retirer = [
+        "l'ensemble de la proposition de loi visant à",
+        "l'ensemble du projet de loi visant à",
+        "l'ensemble du projet de loi",
+        "l'ensemble de la proposition de loi pour",
+        "l'ensemble de la proposition de loi relative à",
+        "l'ensemble du projet de loi sur",
+        "(texte de la commission mixte paritaire)."
+    ]
+    
+    for phrase in phrases_a_retirer:
+        # Remplacement insensible à la casse
+        idx = t.lower().find(phrase.lower())
+        while idx != -1:
+            t = t[:idx] + t[idx + len(phrase):]
+            idx = t.lower().find(phrase.lower())
+            
+    # Nettoyage des espaces multiples éventuels
+    t = " ".join(t.split())
+    
     return t[:130] + "..." if len(t) > 130 else t
 
 st.write(f"**{len(filtered_scrutins)}** scrutin(s) disponible(s)")
@@ -216,13 +238,13 @@ st.write(f"**{len(filtered_scrutins)}** scrutin(s) disponible(s)")
 index_choisi = st.selectbox(
     "Sélectionnez un projet / proposition de loi :",
     options=range(len(filtered_scrutins)),
-    format_func=lambda i: format_titre(filtered_scrutins[i])
+    format_func=lambda i: format_titre_select(filtered_scrutins[i])
 )
 
 vote = filtered_scrutins[index_choisi]
 
 # --------------------------------------------------------------------------- #
-# Détails du Scrutin Sélectionné
+# Détails du Scrutin Sélectionné (Conserve le titre complet d'origine)
 # --------------------------------------------------------------------------- #
 
 st.divider()
