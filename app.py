@@ -17,7 +17,7 @@ THEMES = {
     "Écologie": [
         "climat", "environnement", "écologie", "biodiversité",
         "pollution", "carbone", "renouvelable", "transition énergétique",
-        "développement durable", "eau", "air", "déchets",
+        "développement durable", "l'eau", "l'air", "déchets",
         "recyclage", "agriculture durable", "émissions"
     ],
     "Économie": [
@@ -85,7 +85,7 @@ THEMES = {
     ],
     "Numérique": [
         "numérique", "informatique", "internet",
-        "intelligence artificielle", "ia",
+        "intelligence artificielle", "l'ia",
         "cyber", "données", "rgpd",
         "algorithme", "logiciel", "cloud",
         "5g", "télécommunications"
