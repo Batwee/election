@@ -11,14 +11,14 @@ st.set_page_config(
 )
 
 # --------------------------------------------------------------------------- #
-# Dictionnaire des Thèmes (Mots-clés sécurisés avec frontières de mots / expressions exactes)
+# Dictionnaire des Thèmes
 # --------------------------------------------------------------------------- #
 THEMES = {
     "Écologie": [
         "climat", "environnement", "écologie", "biodiversité",
         "pollution", "carbone", "renouvelable", "transition énergétique",
         "développement durable", "l'eau", "l'air", "déchets",
-        "recyclage", "agriculture", "agricole",  "durable", "émissions"
+        "recyclage", "agriculture durable", "émissions"
     ],
     "Économie": [
         "économie", "budget", "finances", "fiscal", "fiscalité",
@@ -159,6 +159,18 @@ def load_votes():
         st.error(f"Erreur lors du chargement des données : {e}")
         return []
 
+@st.cache_data(ttl=3600)
+def load_clair_vote(numero_scrutin):
+    """Interroge l'API clair.vote pour récupérer les détails supplémentaires d'un scrutin."""
+    try:
+        url = f"https://clair.vote/api/v1/scrutins/{numero_scrutin}"
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return None
+
 scrutins = load_votes()
 
 if not scrutins:
@@ -174,11 +186,9 @@ st.title("🏛️ Votes de l'Assemblée nationale")
 with st.sidebar:
     st.header("Filtres")
     
-    # Filtre par Thème
     options_themes = ["Tous les thèmes"] + list(THEMES.keys())
     theme_choisi = st.selectbox("Filtrer par thème :", options=options_themes)
     
-    # Filtre par type de vote
     only_final = st.checkbox("Uniquement les votes d'ensemble", value=True)
 
 # --------------------------------------------------------------------------- #
@@ -190,11 +200,9 @@ filtered_scrutins = []
 for s in scrutins:
     titre_norm = normalize(s.get("titre", ""))
     
-    # 1. Filtre 'Vote d'ensemble'
     if only_final and "ensemble" not in titre_norm:
         continue
     
-    # 2. Filtre par Thème (Sécurisé pour éviter les sous-chaînes parasites comme "paritaire")
     if theme_choisi != "Tous les thèmes":
         keywords = THEMES.get(theme_choisi, [])
         match = False
@@ -202,13 +210,11 @@ for s in scrutins:
         
         for kw in keywords:
             kw_norm = normalize(kw)
-            # Si le mot-clé contient un espace (ex: "l'eau", "l'air", "transition énergétique"), on cherche la sous-chaîne exacte
             if " " in kw_norm:
                 if kw_norm in titre_norm:
                     match = True
                     break
             else:
-                # Sinon, on vérifie si le mot-clé correspond exactement à un mot entier du titre
                 if kw_norm in mots_titre:
                     match = True
                     break
@@ -223,13 +229,11 @@ if not filtered_scrutins:
     st.stop()
 
 # --------------------------------------------------------------------------- #
-# Sélecteur du Scrutin (avec nettoyage spécifique pour l'affichage du menu)
+# Sélecteur du Scrutin
 # --------------------------------------------------------------------------- #
 
 def format_titre_select(s) -> str:
-    """Nettoie le titre uniquement pour le select, sans modifier les données sources."""
     t = s.get("titre", "Scrutin sans titre")
-    
     phrases_a_retirer = [
         "l'ensemble de la proposition de loi visant à",
         "l'ensemble du projet de loi visant à",
@@ -247,7 +251,6 @@ def format_titre_select(s) -> str:
             idx = t.lower().find(phrase.lower())
             
     t = " ".join(t.split())
-    
     return t[:130] + "..." if len(t) > 130 else t
 
 st.write(f"**{len(filtered_scrutins)}** scrutin(s) disponible(s)")
@@ -259,6 +262,10 @@ index_choisi = st.selectbox(
 )
 
 vote = filtered_scrutins[index_choisi]
+numero_scrutin = vote.get("numero")
+
+# Récupération des données additionnelles via l'API clair.vote
+clair_data = load_clair_vote(numero_scrutin)
 
 # --------------------------------------------------------------------------- #
 # Détails du Scrutin Sélectionné
@@ -268,7 +275,7 @@ st.divider()
 st.subheader(vote.get("titre"))
 
 col_m1, col_m2, col_m3 = st.columns(3)
-col_m1.write(f"**Scrutin n° :** {vote.get('numero')}")
+col_m1.write(f"**Scrutin n° :** {numero_scrutin}")
 col_m2.write(f"**Date du vote :** {vote.get('date')}")
 
 sort_info = str(vote.get("sort", "Non précisé"))
@@ -294,7 +301,7 @@ c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
 # --------------------------------------------------------------------------- #
-# Graphique en Barres par Groupe Politique (Tri forcé par index catégoriel)
+# Graphique en Barres par Groupe Politique
 # --------------------------------------------------------------------------- #
 
 st.divider()
@@ -322,10 +329,44 @@ else:
 
             st.bar_chart(
                 df,
-                color=["#2ecc71", "#e74c3c", "#f39c12"],  # Vert (Pour), Rouge (Contre), Orange (Abstention)
+                color=["#2ecc71", "#e74c3c", "#f39c12"],
                 height=400
             )
         else:
             st.info("Aucun vote enregistré parmi les groupes pour ce scrutin.")
     else:
         st.warning("Format des données des groupes incorrect.")
+
+# --------------------------------------------------------------------------- #
+# Résumé, Liens et Détail des Votes par Parti (API clair.vote)
+# --------------------------------------------------------------------------- #
+
+st.divider()
+st.markdown("### 📄 Informations complémentaires et détails des votes")
+
+if clair_data:
+    # 1. Résumé du texte
+    resume = clair_data.get("resume") or clair_data.get("description") or clair_data.get("objet")
+    if resume:
+        st.markdown("#### 📝 Résumé de la loi")
+        st.write(resume)
+    
+    # 2. Lien vers les informations officielles
+    url_info = clair_data.get("url") or clair_data.get("lien") or f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin}"
+    if url_info:
+        st.markdown(f"🔗 **Lien officiel :** [Consulter la page source]({url_info})")
+
+    # 3. Qui a voté quoi dans quel parti (si disponible dans l'API)
+    # L'API clair.vote renvoie souvent les détails individuels ou par parlementaire/groupe
+    details_votes = clair_data.get("votes") or clair_data.get("acteurs") or clair_data.get("groupesDetails")
+    
+    if details_votes and isinstance(details_votes, list):
+        st.markdown("#### 👥 Détail précis des votes par député / groupe")
+        df_details = pd.DataFrame(details_votes)
+        st.dataframe(df_details, use_container_width=True)
+    else:
+        st.info("Le détail nominatif ultra-précis par député n'est pas structuré sous ce format dans l'API clair.vote pour ce scrutin, référez-vous au graphique agrégé ci-dessus.")
+else:
+    # Lien de secours vers le site officiel de l'Assemblée si l'API ne répond pas
+    st.markdown(f"🔗 **Lien officiel AN :** [Consulter le scrutin n°{numero_scrutin} sur l'Assemblée Nationale](https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin})")
+    st.info("Impossible de récupérer les informations complémentaires détaillées de l'API clair.vote pour le moment.")
