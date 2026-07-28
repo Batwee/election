@@ -17,7 +17,7 @@ THEMES = {
     "Écologie": [
         "climat", "environnement", "écologie", "biodiversité",
         "pollution", "carbone", "renouvelable", "transition énergétique",
-        "développement durable", "l'eau", "l'air", "déchets",
+        "développement durable", "eau", "air", "déchets",
         "recyclage", "agriculture durable", "émissions"
     ],
     "Économie": [
@@ -85,7 +85,7 @@ THEMES = {
     ],
     "Numérique": [
         "numérique", "informatique", "internet",
-        "intelligence artificielle", "l'ia",
+        "intelligence artificielle", "ia",
         "cyber", "données", "rgpd",
         "algorithme", "logiciel", "cloud",
         "5g", "télécommunications"
@@ -135,7 +135,7 @@ THEMES = {
     ]
 }
 
-# Ordre politique de la gauche vers la droite pour le tri du graphique
+# Ordre politique strict de la gauche vers la droite pour le tri forcé du graphique
 ORDRE_GROUPES = [
     "GDR", "LFI-NFP", "EcoS", "SOC", "Dem", "EPR", "HOR", "LIOT", "DR", "UDR", "RN", "NI"
 ]
@@ -215,7 +215,6 @@ def format_titre_select(s) -> str:
     """Nettoie le titre uniquement pour le select, sans modifier les données sources."""
     t = s.get("titre", "Scrutin sans titre")
     
-    # Liste des expressions à retirer du select
     phrases_a_retirer = [
         "l'ensemble de la proposition de loi visant à",
         "l'ensemble du projet de loi visant à",
@@ -247,7 +246,7 @@ index_choisi = st.selectbox(
 vote = filtered_scrutins[index_choisi]
 
 # --------------------------------------------------------------------------- #
-# Détails du Scrutin Sélectionné (Conserve le titre complet d'origine)
+# Détails du Scrutin Sélectionné
 # --------------------------------------------------------------------------- #
 
 st.divider()
@@ -280,7 +279,7 @@ c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
 # --------------------------------------------------------------------------- #
-# Graphique en Barres par Groupe Politique (Trié de gauche à droite)
+# Graphique en Barres par Groupe Politique (Tri forcé par index catégoriel)
 # --------------------------------------------------------------------------- #
 
 st.divider()
@@ -299,10 +298,14 @@ else:
         df = df[df["total"] > 0].drop(columns=["total"])
 
         if not df.empty:
-            # Tri selon l'échiquier politique défini dans ORDRE_GROUPES
-            # Les groupes absents de la liste seront placés à la fin par défaut
-            df["ordre_tri"] = df.index.map(lambda x: ORDRE_GROUPES.index(x) if x in ORDRE_GROUPES else 999)
-            df = df.sort_values("ordre_tri").drop(columns=["ordre_tri"])
+            # Conversion de l'index en type Categorical pour imposer l'ordre exact à Altair/Streamlit
+            groupes_presents = [g for g in ORDRE_GROUPES if g in df.index]
+            # Ajout des éventuels groupes non répertoriés à la fin
+            autres_groupes = [g for g in df.index if g not in ORDRE_GROUPES]
+            ordre_final = groupes_presents + autres_groupes
+
+            df = df.reindex(ordre_final)
+            df.index = pd.CategoricalIndex(df.index, categories=ordre_final, ordered=True)
 
             st.bar_chart(
                 df,
