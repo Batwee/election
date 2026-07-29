@@ -341,11 +341,18 @@ if clair_data:
         contres_list = votes_par_position.get("contre", [])
         abst_list = votes_par_position.get("abstention", [])
         
-        # Affichage des totaux additionnés
-        col_t1, col_t2, col_t3 = st.columns(3)
-        col_t1.metric("Total Pour", len(pours_list))
-        col_t2.metric("Total Contre", len(contres_list))
-        col_t3.metric("Total Abstention", len(abst_list))
+        total_pour = len(pours_list)
+        total_contre = len(contres_list)
+        total_abst = len(abst_list)
+        total_votants_clair = total_pour + total_contre + total_abst
+
+        # Affichage des totaux additionnés (avec le Total Votants)
+        col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+        col_t1.metric("Total Pour", total_pour)
+        col_t2.metric("Total Contre", total_contre)
+        col_t3.metric("Total Abstention", total_abst)
+        col_t4.metric("Total Votants 👥", total_votants_clair)
+        st.caption("ℹ️ Ce bloc de synthèse sort d'après la rectification du vote ou un truc du genre.")
 
         tab_p, tab_c, tab_a = st.tabs(["🟢 Pour", "🔴 Contre", "🟠 Abstention"])
         
