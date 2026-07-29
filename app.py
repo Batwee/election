@@ -267,7 +267,7 @@ index_choisi = st.selectbox(
 vote = filtered_scrutins[index_choisi]
 numero_scrutin = vote.get("numero")
 
-# Récupération des données via l'API clair.vote (contient sourceData avec misesAuPoint)
+# Récupération des données via l'API clair.vote
 clair_data = load_clair_vote(numero_scrutin)
 
 # --------------------------------------------------------------------------- #
@@ -304,11 +304,13 @@ c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
 # --------------------------------------------------------------------------- #
-# 2. Synthèse Globale avec Rectifications (Clair vote)
+# 2. Synthèse Globale avec Rectifications (Clair vote) - Sécurisée
 # --------------------------------------------------------------------------- #
 if clair_data and "sourceData" in clair_data:
-    decompte_officiel = clair_data["sourceData"].get("syntheseVote", {}).get("decompte", {})
-    if decompte_officiel:
+    synthese_data = clair_data["sourceData"].get("syntheseVote", {})
+    decompte_officiel = synthese_data.get("decompte", {})
+    
+    if decompte_officiel and int(decompte_officiel.get("nombreVotants", 0)) > 0:
         st.markdown("### 📊 Synthèse globale du vote (Clair vote : rectifications)")
         
         p_off = int(decompte_officiel.get("pour", 0))
@@ -356,35 +358,36 @@ else:
             )
 
 # --------------------------------------------------------------------------- #
-# Graphique 2 : Répartition des votes par groupe politique (Clair vote : rectifications)
+# Graphique 2 : Répartition des votes par groupe politique (Clair vote : rectifications) - Sécurisé
 # --------------------------------------------------------------------------- #
 if clair_data and "sourceData" in clair_data:
     ventilation = clair_data["sourceData"].get("ventilationVotes", {}).get("organe", {}).get("groupes", {}).get("groupe", [])
     
     if ventilation:
-        st.divider()
-        st.markdown("### 🏛️ Répartition des votes par groupe politique (Clair vote : rectifications)")
-        
         data_rectifiee = []
         for g_item in ventilation:
-            # Récupération du sigle du groupe (souvent sous 'libelle' ou l'une des clés de l'objet)
-            sigle_g = g_item.get("sigle") or g_item.get("libelle") or "Inconnu"
-            decompte = g_item.get("vote", {}).get("decompteVoix", {})
+            sigle_g = g_item.get("sigle") or g_item.get("libelle")
+            if sigle_g:
+                decompte = g_item.get("vote", {}).get("decompteVoix", {})
+                data_rectifiee.append({
+                    "sigle": sigle_g,
+                    "pour": int(decompte.get("pour", 0)),
+                    "contre": int(decompte.get("contre", 0)),
+                    "abstention": int(decompte.get("abstention", 0))
+                })
             
-            data_rectifiee.append({
-                "sigle": sigle_g,
-                "pour": int(decompte.get("pour", 0)),
-                "contre": int(decompte.get("contre", 0)),
-                "abstention": int(decompte.get("abstention", 0))
-            })
+        if data_rectifiee:
+            df_rect = pd.DataFrame(data_rectifiee)
+            # Dédoublonnage par somme pour éviter les erreurs Pandas
+            df_rect = df_rect.groupby("sigle").sum()
             
-        df_rect = pd.DataFrame(data_rectifiee)
-        if not df_rect.empty and "sigle" in df_rect.columns:
-            df_rect = df_rect.set_index("sigle")
             df_rect["total"] = df_rect["pour"] + df_rect["contre"] + df_rect["abstention"]
             df_rect = df_rect[df_rect["total"] > 0].drop(columns=["total"])
             
             if not df_rect.empty:
+                st.divider()
+                st.markdown("### 🏛️ Répartition des votes par groupe politique (Clair vote : rectifications)")
+                
                 groupes_presents_r = [g for g in ORDRE_GROUPES if g in df_rect.index]
                 autres_groupes_r = [g for g in df_rect.index if g not in ORDRE_GROUPES]
                 ordre_final_r = groupes_presents_r + autres_groupes_r
