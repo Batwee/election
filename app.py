@@ -150,7 +150,6 @@ def normalize(text: str) -> str:
 
 @st.cache_data(ttl=3600)
 def load_votes():
-    """Charge le fichier JSON contenant les données de base des scrutins."""
     try:
         res = requests.get(URL_API)
         res.raise_for_status()
@@ -161,10 +160,9 @@ def load_votes():
 
 @st.cache_data(ttl=3600)
 def load_clair_vote(numero_scrutin):
-    """Interroge l'API clair.vote pour récupérer les données enrichies (mises au point / rectifications)."""
     try:
         url = f"https://clair.vote/api/v1/scrutins/{numero_scrutin}"
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=3)
         if res.status_code == 200:
             data = res.json()
             if isinstance(data, dict):
@@ -187,10 +185,8 @@ st.title("🏛️ Votes de l'Assemblée nationale")
 
 with st.sidebar:
     st.header("Filtres")
-    
     options_themes = ["Tous les thèmes"] + list(THEMES.keys())
     theme_choisi = st.selectbox("Filtrer par thème :", options=options_themes)
-    
     only_final = st.checkbox("Uniquement les votes d'ensemble", value=True)
 
 # --------------------------------------------------------------------------- #
@@ -198,18 +194,14 @@ with st.sidebar:
 # --------------------------------------------------------------------------- #
 
 filtered_scrutins = []
-
 for s in scrutins:
     titre_norm = normalize(s.get("titre", ""))
-    
     if only_final and "ensemble" not in titre_norm:
         continue
-    
     if theme_choisi != "Tous les thèmes":
         keywords = THEMES.get(theme_choisi, [])
         match = False
         mots_titre = titre_norm.split()
-        
         for kw in keywords:
             kw_norm = normalize(kw)
             if " " in kw_norm:
@@ -220,10 +212,8 @@ for s in scrutins:
                 if kw_norm in mots_titre:
                     match = True
                     break
-                    
         if not match:
             continue
-            
     filtered_scrutins.append(s)
 
 if not filtered_scrutins:
@@ -245,13 +235,11 @@ def format_titre_select(s) -> str:
         "l'ensemble du projet de loi sur",
         "(texte de la commission mixte paritaire)."
     ]
-    
     for phrase in phrases_a_retirer:
         idx = t.lower().find(phrase.lower())
         while idx != -1:
             t = t[:idx] + t[idx + len(phrase):]
             idx = t.lower().find(phrase.lower())
-            
     t = " ".join(t.split())
     return t[:130] + "..." if len(t) > 130 else t
 
@@ -265,8 +253,6 @@ index_choisi = st.selectbox(
 
 vote = filtered_scrutins[index_choisi]
 numero_scrutin = vote.get("numero")
-
-# Récupération des données via l'API clair.vote
 clair_data = load_clair_vote(numero_scrutin)
 
 # --------------------------------------------------------------------------- #
@@ -290,33 +276,28 @@ if vote.get("demandeur"):
     st.caption(f"**Demandeur :** {vote.get('demandeur')}")
 
 # --------------------------------------------------------------------------- #
-# 1. Synthèse Globale Initiale (Brute)
+# 1 & 2. Synthèses Globales (Brute + Clair Vote ou secours)
 # --------------------------------------------------------------------------- #
 
 st.markdown("### 📊 Synthèse globale du vote (Brute)")
 syn = vote.get("syntheseVote", {})
-
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Pour 🟩", syn.get("pour", 0))
 c2.metric("Contre 🟥", syn.get("contre", 0))
 c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
-# --------------------------------------------------------------------------- #
-# 2. Synthèse Globale avec Rectifications (Clair vote)
-# --------------------------------------------------------------------------- #
+# Synthèse Clair Vote (ou message d'information si non disponible)
 decompte_officiel = {}
 if clair_data:
-    # Recherche robuste du décompte officiel dans l'objet clair_data (racine ou sourceData)
     source_data = clair_data.get("sourceData", {})
     if isinstance(source_data, dict):
         decompte_officiel = source_data.get("syntheseVote", {}).get("decompte", {})
     if not decompte_officiel:
         decompte_officiel = clair_data.get("syntheseVote", {}).get("decompte", {})
 
+st.markdown("### 📊 Synthèse globale du vote (Clair vote : rectifications)")
 if decompte_officiel and int(decompte_officiel.get("nombreVotants", 0) or decompte_officiel.get("total", 0)) > 0:
-    st.markdown("### 📊 Synthèse globale du vote (Clair vote : rectifications)")
-    
     p_off = int(decompte_officiel.get("pour", 0))
     c_off = int(decompte_officiel.get("contre", 0))
     a_off = int(decompte_officiel.get("abstention", 0))
@@ -327,6 +308,13 @@ if decompte_officiel and int(decompte_officiel.get("nombreVotants", 0) or decomp
     co2.metric("Contre 🟥 (Officiel)", c_off)
     co3.metric("Abstentions 🟧 (Officiel)", a_off)
     co4.metric("Total Votants 👥 (Officiel)", t_off)
+else:
+    st.info("Données de rectification Clair.vote non disponibles pour ce scrutin (affichage identique aux données brutes).")
+    co1, co2, co3, co4 = st.columns(4)
+    co1.metric("Pour 🟩 (Officiel)", syn.get("pour", 0))
+    co2.metric("Contre 🟥 (Officiel)", syn.get("contre", 0))
+    co3.metric("Abstentions 🟧 (Officiel)", syn.get("abstention", 0))
+    co4.metric("Total Votants 👥 (Officiel)", syn.get("total", 0))
 
 # --------------------------------------------------------------------------- #
 # Graphique 1 : Répartition initiale par groupe politique (Brut)
@@ -336,12 +324,10 @@ st.divider()
 st.markdown("### 🏛️ Répartition des votes par groupe politique (Brut)")
 
 groupes = vote.get("groupes", [])
-
 if not groupes:
     st.info("Le détail par groupe politique n'est pas disponible pour ce scrutin.")
 else:
     df = pd.DataFrame(groupes)
-    
     if "sigle" in df.columns:
         df = df.set_index("sigle")[["pour", "contre", "abstention"]]
         df["total"] = df["pour"] + df["contre"] + df["abstention"]
@@ -355,18 +341,16 @@ else:
             df = df.reindex(ordre_final)
             df.index = pd.CategoricalIndex(df.index, categories=ordre_final, ordered=True)
 
-            st.bar_chart(
-                df,
-                color=["#2ecc71", "#e74c3c", "#f39c12"],
-                height=400
-            )
+            st.bar_chart(df, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
 
 # --------------------------------------------------------------------------- #
-# Graphique 2 : Répartition des votes par groupe politique (Clair vote : rectifications)
+# Graphique 2 : Répartition des votes par groupe politique (Clair vote / Rectifié)
 # --------------------------------------------------------------------------- #
+st.divider()
+st.markdown("### 🏛️ Répartition des votes par groupe politique (Clair vote : rectifications)")
+
 ventilation = []
 if clair_data:
-    # Recherche robuste de la ventilation dans clair_data ou sourceData
     src = clair_data.get("sourceData", {})
     if isinstance(src, dict):
         ventilation = src.get("ventilationVotes", {}).get("organe", {}).get("groupes", {}).get("groupe", [])
@@ -389,14 +373,10 @@ if ventilation:
     if data_rectifiee:
         df_rect = pd.DataFrame(data_rectifiee)
         df_rect = df_rect.groupby("sigle").sum()
-        
         df_rect["total"] = df_rect["pour"] + df_rect["contre"] + df_rect["abstention"]
         df_rect = df_rect[df_rect["total"] > 0].drop(columns=["total"])
         
         if not df_rect.empty:
-            st.divider()
-            st.markdown("### 🏛️ Répartition des votes par groupe politique (Clair vote : rectifications)")
-            
             groupes_presents_r = [g for g in ORDRE_GROUPES if g in df_rect.index]
             autres_groupes_r = [g for g in df_rect.index if g not in ORDRE_GROUPES]
             ordre_final_r = groupes_presents_r + autres_groupes_r
@@ -404,14 +384,15 @@ if ventilation:
             df_rect = df_rect.reindex(ordre_final_r)
             df_rect.index = pd.CategoricalIndex(df_rect.index, categories=ordre_final_r, ordered=True)
 
-            st.bar_chart(
-                df_rect,
-                color=["#2ecc71", "#e74c3c", "#f39c12"],
-                height=400
-            )
+            st.bar_chart(df_rect, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
+else:
+    # Fallback sur les données brutes si Clair.vote n'a pas la ventilation
+    st.info("Ventilation détaillée Clair.vote non disponible, affichage de la répartition de base.")
+    if groupes:
+        st.bar_chart(df, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
 
 # --------------------------------------------------------------------------- #
-# Résumé, Liens et Détails Supplémentaires (API clair.vote) - Qui vote quoi
+# Résumé, Liens et Détails Supplémentaires (Qui vote quoi)
 # --------------------------------------------------------------------------- #
 
 st.divider()
@@ -465,5 +446,6 @@ if clair_data:
             else:
                 st.write("Aucun détail disponible.")
 else:
+    # Affichage de secours si clair_data est absent
+    st.info("Les informations détaillées par député (clair.vote) ne sont pas chargées pour ce scrutin.")
     st.markdown(f"🔗 **Lien officiel AN :** [Consulter le scrutin n°{numero_scrutin} sur le site de l'Assemblée Nationale](https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin})")
-    st.info("Les informations enrichies de l'API clair.vote ne sont pas disponibles pour ce scrutin spécifique.")
