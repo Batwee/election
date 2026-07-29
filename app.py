@@ -276,7 +276,7 @@ if vote.get("demandeur"):
     st.caption(f"**Demandeur :** {vote.get('demandeur')}")
 
 # --------------------------------------------------------------------------- #
-# 1 & 2. Synthèses Globales (Brute + Clair Vote ou secours)
+# 1 & 2. Synthèses Globales (Toutes deux basées sur les données brutes)
 # --------------------------------------------------------------------------- #
 
 st.markdown("### 📊 Synthèse globale du vote (Brute)")
@@ -287,34 +287,13 @@ c2.metric("Contre 🟥", syn.get("contre", 0))
 c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
-# Synthèse Clair Vote (ou message d'information si non disponible)
-decompte_officiel = {}
-if clair_data:
-    source_data = clair_data.get("sourceData", {})
-    if isinstance(source_data, dict):
-        decompte_officiel = source_data.get("syntheseVote", {}).get("decompte", {})
-    if not decompte_officiel:
-        decompte_officiel = clair_data.get("syntheseVote", {}).get("decompte", {})
-
-st.markdown("### 📊 Synthèse globale du vote (Clair vote : rectifications)")
-if decompte_officiel and int(decompte_officiel.get("nombreVotants", 0) or decompte_officiel.get("total", 0)) > 0:
-    p_off = int(decompte_officiel.get("pour", 0))
-    c_off = int(decompte_officiel.get("contre", 0))
-    a_off = int(decompte_officiel.get("abstention", 0))
-    t_off = int(decompte_officiel.get("nombreVotants", 0) or decompte_officiel.get("total", 0))
-    
-    co1, co2, co3, co4 = st.columns(4)
-    co1.metric("Pour 🟩 (Officiel)", p_off)
-    co2.metric("Contre 🟥 (Officiel)", c_off)
-    co3.metric("Abstentions 🟧 (Officiel)", a_off)
-    co4.metric("Total Votants 👥 (Officiel)", t_off)
-else:
-    st.info("Données de rectification Clair.vote non disponibles pour ce scrutin (affichage identique aux données brutes).")
-    co1, co2, co3, co4 = st.columns(4)
-    co1.metric("Pour 🟩 (Officiel)", syn.get("pour", 0))
-    co2.metric("Contre 🟥 (Officiel)", syn.get("contre", 0))
-    co3.metric("Abstentions 🟧 (Officiel)", syn.get("abstention", 0))
-    co4.metric("Total Votants 👥 (Officiel)", syn.get("total", 0))
+st.markdown("### 📊 Synthèse globale du vote (Résultat direct)")
+co1, co2, co3, co4 = st.columns(4)
+co1.metric("Pour 🟩", syn.get("pour", 0))
+co2.metric("Contre 🟥", syn.get("contre", 0))
+co3.metric("Abstentions 🟧", syn.get("abstention", 0))
+co4.metric("Total Votants 👥", syn.get("total", 0))
+st.caption("ℹ️ Ce bloc et la synthèse ci-dessus sortent d'après le résultat direct, et non de la rectification.")
 
 # --------------------------------------------------------------------------- #
 # Graphique 1 : Répartition initiale par groupe politique (Brut)
@@ -344,52 +323,16 @@ else:
             st.bar_chart(df, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
 
 # --------------------------------------------------------------------------- #
-# Graphique 2 : Répartition des votes par groupe politique (Clair vote / Rectifié)
+# Graphique 2 : Répartition des votes par groupe politique (Basé sur le brut)
 # --------------------------------------------------------------------------- #
 st.divider()
-st.markdown("### 🏛️ Répartition des votes par groupe politique (Clair vote : rectifications)")
+st.markdown("### 🏛️ Répartition des votes par groupe politique (Résultat direct)")
 
-ventilation = []
-if clair_data:
-    src = clair_data.get("sourceData", {})
-    if isinstance(src, dict):
-        ventilation = src.get("ventilationVotes", {}).get("organe", {}).get("groupes", {}).get("groupe", [])
-    if not ventilation:
-        ventilation = clair_data.get("ventilationVotes", {}).get("organe", {}).get("groupes", {}).get("groupe", [])
-
-if ventilation:
-    data_rectifiee = []
-    for g_item in ventilation:
-        sigle_g = g_item.get("sigle") or g_item.get("libelle")
-        if sigle_g:
-            decompte = g_item.get("vote", {}).get("decompteVoix", {})
-            data_rectifiee.append({
-                "sigle": sigle_g,
-                "pour": int(decompte.get("pour", 0)),
-                "contre": int(decompte.get("contre", 0)),
-                "abstention": int(decompte.get("abstention", 0))
-            })
-        
-    if data_rectifiee:
-        df_rect = pd.DataFrame(data_rectifiee)
-        df_rect = df_rect.groupby("sigle").sum()
-        df_rect["total"] = df_rect["pour"] + df_rect["contre"] + df_rect["abstention"]
-        df_rect = df_rect[df_rect["total"] > 0].drop(columns=["total"])
-        
-        if not df_rect.empty:
-            groupes_presents_r = [g for g in ORDRE_GROUPES if g in df_rect.index]
-            autres_groupes_r = [g for g in df_rect.index if g not in ORDRE_GROUPES]
-            ordre_final_r = groupes_presents_r + autres_groupes_r
-
-            df_rect = df_rect.reindex(ordre_final_r)
-            df_rect.index = pd.CategoricalIndex(df_rect.index, categories=ordre_final_r, ordered=True)
-
-            st.bar_chart(df_rect, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
+if groupes:
+    st.bar_chart(df, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
+    st.caption("ℹ️ Ce graphique sort d'après le résultat direct et non de la rectification.")
 else:
-    # Fallback sur les données brutes si Clair.vote n'a pas la ventilation
-    st.info("Ventilation détaillée Clair.vote non disponible, affichage de la répartition de base.")
-    if groupes:
-        st.bar_chart(df, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
+    st.info("Le détail par groupe politique n'est pas disponible.")
 
 # --------------------------------------------------------------------------- #
 # Résumé, Liens et Détails Supplémentaires (Qui vote quoi)
@@ -411,41 +354,51 @@ if clair_data:
     votes_par_position = clair_data.get("votesByPosition")
     if votes_par_position and isinstance(votes_par_position, dict):
         st.markdown("#### 🔍 Ventilation détaillée par parlementaire (Qui a voté quoi)")
+        
+        pours_list = votes_par_position.get("pour", [])
+        contres_list = votes_par_position.get("contre", [])
+        abst_list = votes_par_position.get("abstention", [])
+        
+        # Affichage des totaux additionnés
+        col_t1, col_t2, col_t3 = st.columns(3)
+        col_t1.metric("Total Pour", len(pours_list))
+        col_t2.metric("Total Contre", len(contres_list))
+        col_t3.metric("Total Abstention", len(abst_list))
+
         tab_p, tab_c, tab_a = st.tabs(["🟢 Pour", "🔴 Contre", "🟠 Abstention"])
         
         with tab_p:
-            pours_list = votes_par_position.get("pour", [])
             if pours_list:
                 df_p = pd.DataFrame([{
+                    "Index": idx,
                     "Nom": f"{item.get('parlementaire', {}).get('prenom', '')} {item.get('parlementaire', {}).get('nom', '')}",
                     "Groupe": item.get('parlementaire', {}).get('groupe', {}).get('nom', 'N/C')
-                } for item in pours_list])
-                st.dataframe(df_p, use_container_width=True)
+                } for idx, item in enumerate(pours_list, start=1)])
+                st.dataframe(df_p, use_container_width=True, hide_index=True)
             else:
                 st.write("Aucun détail disponible.")
                 
         with tab_c:
-            contres_list = votes_par_position.get("contre", [])
             if contres_list:
                 df_c = pd.DataFrame([{
+                    "Index": idx,
                     "Nom": f"{item.get('parlementaire', {}).get('prenom', '')} {item.get('parlementaire', {}).get('nom', '')}",
                     "Groupe": item.get('parlementaire', {}).get('groupe', {}).get('nom', 'N/C')
-                } for item in contres_list])
-                st.dataframe(df_c, use_container_width=True)
+                } for idx, item in enumerate(contres_list, start=1)])
+                st.dataframe(df_c, use_container_width=True, hide_index=True)
             else:
                 st.write("Aucun détail disponible.")
                 
         with tab_a:
-            abst_list = votes_par_position.get("abstention", [])
             if abst_list:
                 df_a = pd.DataFrame([{
+                    "Index": idx,
                     "Nom": f"{item.get('parlementaire', {}).get('prenom', '')} {item.get('parlementaire', {}).get('nom', '')}",
                     "Groupe": item.get('parlementaire', {}).get('groupe', {}).get('nom', 'N/C')
-                } for item in abst_list])
-                st.dataframe(df_a, use_container_width=True)
+                } for idx, item in enumerate(abst_list, start=1)])
+                st.dataframe(df_a, use_container_width=True, hide_index=True)
             else:
                 st.write("Aucun détail disponible.")
 else:
-    # Affichage de secours si clair_data est absent
     st.info("Les informations détaillées par député (clair.vote) ne sont pas chargées pour ce scrutin.")
     st.markdown(f"🔗 **Lien officiel AN :** [Consulter le scrutin n°{numero_scrutin} sur le site de l'Assemblée Nationale](https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin})")
