@@ -161,13 +161,12 @@ def load_votes():
 
 @st.cache_data(ttl=3600)
 def load_clair_vote(numero_scrutin):
-    """Interroge l'API clair.vote pour récupérer le résumé et les détails complets."""
+    """Interroge l'API clair.vote pour récupérer les données enrichies (mises au point / rectifications)."""
     try:
         url = f"https://clair.vote/api/v1/scrutins/{numero_scrutin}"
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
-            # L'API clair.vote encapsule souvent la data dans une clé "data" ou la renvoie directement
             if isinstance(data, dict) and "data" in data:
                 return data["data"]
             return data
@@ -268,7 +267,7 @@ index_choisi = st.selectbox(
 vote = filtered_scrutins[index_choisi]
 numero_scrutin = vote.get("numero")
 
-# Récupération des données additionnelles via l'API clair.vote
+# Récupération des données via l'API clair.vote (contient sourceData avec misesAuPoint)
 clair_data = load_clair_vote(numero_scrutin)
 
 # --------------------------------------------------------------------------- #
@@ -292,10 +291,10 @@ if vote.get("demandeur"):
     st.caption(f"**Demandeur :** {vote.get('demandeur')}")
 
 # --------------------------------------------------------------------------- #
-# Synthèse Globale des Votes
+# 1. Synthèse Globale Initiale (Fichier source de base)
 # --------------------------------------------------------------------------- #
 
-st.markdown("### 📊 Synthèse globale du vote")
+st.markdown("### 📊 Synthèse globale du vote (Brute)")
 syn = vote.get("syntheseVote", {})
 
 c1, c2, c3, c4 = st.columns(4)
@@ -305,7 +304,26 @@ c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
 
 # --------------------------------------------------------------------------- #
-# Graphique en Barres par Groupe Politique (Tri forcé de gauche à droite)
+# 2. Synthèse Globale avec Rectifications (Clair vote)
+# --------------------------------------------------------------------------- #
+if clair_data and "sourceData" in clair_data:
+    decompte_officiel = clair_data["sourceData"].get("syntheseVote", {}).get("decompte", {})
+    if decompte_officiel:
+        st.markdown("### 📊 Synthèse globale du vote (Clair vote : rectifications)")
+        
+        p_off = int(decompte_officiel.get("pour", 0))
+        c_off = int(decompte_officiel.get("contre", 0))
+        a_off = int(decompte_officiel.get("abstention", 0))
+        t_off = int(decompte_officiel.get("nombreVotants", 0))
+        
+        co1, co2, co3, co4 = st.columns(4)
+        co1.metric("Pour 🟩 (Officiel)", p_off)
+        co2.metric("Contre 🟥 (Officiel)", c_off)
+        co3.metric("Abstentions 🟧 (Officiel)", a_off)
+        co4.metric("Total Votants 👥 (Officiel)", t_off)
+
+# --------------------------------------------------------------------------- #
+# Graphique 1 : Répartition initiale par groupe politique
 # --------------------------------------------------------------------------- #
 
 st.divider()
@@ -336,10 +354,49 @@ else:
                 color=["#2ecc71", "#e74c3c", "#f39c12"],
                 height=400
             )
-        else:
-            st.info("Aucun vote enregistré parmi les groupes pour ce scrutin.")
-    else:
-        st.warning("Format des données des groupes incorrect.")
+
+# --------------------------------------------------------------------------- #
+# Graphique 2 : Répartition des votes par groupe politique (Clair vote : rectifications)
+# --------------------------------------------------------------------------- #
+if clair_data and "sourceData" in clair_data:
+    ventilation = clair_data["sourceData"].get("ventilationVotes", {}).get("organe", {}).get("groupes", {}).get("groupe", [])
+    
+    if ventilation:
+        st.divider()
+        st.markdown("### 🏛️ Répartition des votes par groupe politique (Clair vote : rectifications)")
+        
+        data_rectifiee = []
+        for g_item in ventilation:
+            # Récupération du sigle du groupe (souvent sous 'libelle' ou l'une des clés de l'objet)
+            sigle_g = g_item.get("sigle") or g_item.get("libelle") or "Inconnu"
+            decompte = g_item.get("vote", {}).get("decompteVoix", {})
+            
+            data_rectifiee.append({
+                "sigle": sigle_g,
+                "pour": int(decompte.get("pour", 0)),
+                "contre": int(decompte.get("contre", 0)),
+                "abstention": int(decompte.get("abstention", 0))
+            })
+            
+        df_rect = pd.DataFrame(data_rectifiee)
+        if not df_rect.empty and "sigle" in df_rect.columns:
+            df_rect = df_rect.set_index("sigle")
+            df_rect["total"] = df_rect["pour"] + df_rect["contre"] + df_rect["abstention"]
+            df_rect = df_rect[df_rect["total"] > 0].drop(columns=["total"])
+            
+            if not df_rect.empty:
+                groupes_presents_r = [g for g in ORDRE_GROUPES if g in df_rect.index]
+                autres_groupes_r = [g for g in df_rect.index if g not in ORDRE_GROUPES]
+                ordre_final_r = groupes_presents_r + autres_groupes_r
+
+                df_rect = df_rect.reindex(ordre_final_r)
+                df_rect.index = pd.CategoricalIndex(df_rect.index, categories=ordre_final_r, ordered=True)
+
+                st.bar_chart(
+                    df_rect,
+                    color=["#2ecc71", "#e74c3c", "#f39c12"],
+                    height=400
+                )
 
 # --------------------------------------------------------------------------- #
 # Résumé, Liens et Détails Supplémentaires (API clair.vote)
@@ -349,18 +406,15 @@ st.divider()
 st.markdown("### 📄 Informations complémentaires et résumé (clair.vote)")
 
 if clair_data:
-    # 1. Résumé IA / Description issu de l'API
     resume_ia = clair_data.get("resumeIA") or clair_data.get("resume") or clair_data.get("description")
     if resume_ia:
         st.markdown("#### 💡 Résumé de la loi")
         st.info(resume_ia)
     
-    # 2. Lien source officiel
     source_url = clair_data.get("sourceUrl") or clair_data.get("url") or f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{numero_scrutin}"
     if source_url:
         st.markdown(f"🔗 **Lien officiel :** [Accéder à la source officielle sur l'Assemblée Nationale]({source_url})")
 
-    # 3. Détails des votes individuels (si présents dans la structure de l'API)
     votes_par_position = clair_data.get("votesByPosition")
     if votes_par_position and isinstance(votes_par_position, dict):
         st.markdown("#### 🔍 Ventilation détaillée par parlementaire")
@@ -372,7 +426,7 @@ if clair_data:
                 df_p = pd.DataFrame([{
                     "Nom": f"{item.get('parlementaire', {}).get('prenom', '')} {item.get('parlementaire', {}).get('nom', '')}",
                     "Groupe": item.get('parlementaire', {}).get('groupe', {}).get('nom', 'N/C')
-                } for item in pours_list[:50]]) # Limité à 50 pour la fluidité de l'affichage
+                } for item in pours_list[:50]])
                 st.dataframe(df_p, use_container_width=True)
                 if len(pours_list) > 50:
                     st.caption(f"Affichage limité à 50 députés sur {len(pours_list)} pour optimiser l'affichage.")
