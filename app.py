@@ -276,31 +276,24 @@ if vote.get("demandeur"):
     st.caption(f"**Demandeur :** {vote.get('demandeur')}")
 
 # --------------------------------------------------------------------------- #
-# 1 & 2. Synthèses Globales (Toutes deux basées sur les données brutes)
+# Synthèse Globale (Résultat direct)
 # --------------------------------------------------------------------------- #
 
-st.markdown("### 📊 Synthèse globale du vote (Brute)")
+st.markdown("### 📊 Synthèse globale du vote (Résultat direct)")
 syn = vote.get("syntheseVote", {})
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Pour 🟩", syn.get("pour", 0))
 c2.metric("Contre 🟥", syn.get("contre", 0))
 c3.metric("Abstentions 🟧", syn.get("abstention", 0))
 c4.metric("Total Votants 👥", syn.get("total", 0))
-
-st.markdown("### 📊 Synthèse globale du vote (Résultat direct)")
-co1, co2, co3, co4 = st.columns(4)
-co1.metric("Pour 🟩", syn.get("pour", 0))
-co2.metric("Contre 🟥", syn.get("contre", 0))
-co3.metric("Abstentions 🟧", syn.get("abstention", 0))
-co4.metric("Total Votants 👥", syn.get("total", 0))
-st.caption("ℹ️ Ce bloc et la synthèse ci-dessus sortent d'après le résultat direct, et non de la rectification.")
+st.caption("ℹ️ Ce bloc de synthèse sort d'après le résultat direct, et non de la rectification.")
 
 # --------------------------------------------------------------------------- #
-# Graphique 1 : Répartition initiale par groupe politique (Brut)
+# Graphique : Répartition par groupe politique (Résultat direct)
 # --------------------------------------------------------------------------- #
 
 st.divider()
-st.markdown("### 🏛️ Répartition des votes par groupe politique (Brut)")
+st.markdown("### 🏛️ Répartition des votes par groupe politique (Résultat direct)")
 
 groupes = vote.get("groupes", [])
 if not groupes:
@@ -321,21 +314,10 @@ else:
             df.index = pd.CategoricalIndex(df.index, categories=ordre_final, ordered=True)
 
             st.bar_chart(df, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
+            st.caption("ℹ️ Ce graphique sort d'après le résultat direct et non de la rectification.")
 
 # --------------------------------------------------------------------------- #
-# Graphique 2 : Répartition des votes par groupe politique (Basé sur le brut)
-# --------------------------------------------------------------------------- #
-st.divider()
-st.markdown("### 🏛️ Répartition des votes par groupe politique (Résultat direct)")
-
-if groupes:
-    st.bar_chart(df, color=["#2ecc71", "#e74c3c", "#f39c12"], height=400)
-    st.caption("ℹ️ Ce graphique sort d'après le résultat direct et non de la rectification.")
-else:
-    st.info("Le détail par groupe politique n'est pas disponible.")
-
-# --------------------------------------------------------------------------- #
-# Résumé, Liens et Détails Supplémentaires (Qui vote quoi)
+# Résumé, Liens et Détails Supplémentaires (clair.vote - Intouché)
 # --------------------------------------------------------------------------- #
 
 st.divider()
