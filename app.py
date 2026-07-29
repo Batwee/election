@@ -352,7 +352,7 @@ if clair_data:
         col_t2.metric("Total Contre", total_contre)
         col_t3.metric("Total Abstention", total_abst)
         col_t4.metric("Total Votants 👥", total_votants_clair)
-        st.caption("ℹ️ Ce bloc de synthèse sort d'après la rectification du vote ou un truc du genre.")
+        st.caption("ℹ️ Ce bloc de synthèse est établi à partir des données rectifiées des votes.")
 
         tab_p, tab_c, tab_a = st.tabs(["🟢 Pour", "🔴 Contre", "🟠 Abstention"])
         
